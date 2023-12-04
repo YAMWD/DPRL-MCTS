@@ -1,8 +1,18 @@
 import numpy as np
+import copy
 
-class MCT:
+class Node:
     def __init__(self, board):
+
         self.board = board
+
+        self.num_simu = 0
+        
+        self.num_wins = 0
+
+        self.c = np.sqrt(2)
+
+        self.child = []
 
     def check_board(self):
         # Check horizontally
@@ -36,11 +46,23 @@ class MCT:
         return 0 in self.board[:, action]
 
     def make_move(self, cur_player, action):
-        pos = np.where(self.board[:, action] == 0)[0][-1]
-        self.board[:, action][pos] = cur_player
+        cur_board = copy.deepcopy(self.board)
+        pos = np.where(cur_board[:, action] == 0)[0][-1]
+        cur_board[:, action][pos] = cur_player
 
-    def MCTS(self):
-        return 0
+        return cur_board
+
+class MCT:
+    def __init__(self, board):
+        self.init_node = Node(board)
+
+    def search(self):
+    
+        print(self.init_node.check_board())
+        
+        if(self.init_node.check_mobility(action = 0)):
+            next_state = self.init_node.make_move(cur_player = 1, action = 0)
+            print(next_state)
 
 if __name__ == '__main__':
 
@@ -55,10 +77,4 @@ if __name__ == '__main__':
 
     test = MCT(board)
 
-    print(test.check_board())
-    
-    if(test.check_mobility(action = 0)):
-
-        test.make_move(cur_player = 1, action = 0)
-
-        print(test.board)
+    test.search()
