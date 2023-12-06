@@ -17,7 +17,7 @@ class Node:
         for action in action_list:
 
             inter_next_state = self.make_move(cur_player = 1, action = action)
-            inter_next_node = Node(inter_next_state)
+            inter_next_node = Node(inter_next_state, parent = self)
 
             next_action_list = inter_next_node.get_action_list()
             if len(next_action_list):
@@ -130,7 +130,7 @@ class MCT:
                 cur_player = 1
         
         result = cur_node.check_board() == 1
-        self.back_prop(node, result)
+        return result 
 
     def back_prop(self, node, result):
         node.num_wins += result
@@ -138,7 +138,6 @@ class MCT:
         if(node.parent != None):
             self.back_prop(node.parent, result)
             
-
     def search(self, node):
         #Check if it is leaf node
         if((not node.check_playable()) or node.check_board()):
@@ -148,10 +147,20 @@ class MCT:
 
         if child.num_simulations:
             next_child = self.expand(child)
-            self.rollout(next_child)
+            result = self.rollout(next_child)
+            self.back_prop(next_child, result)
         else:
-            self.rollout(child)
-        
+            result = self.rollout(child)
+            self.back_prop(child, result)
+
+def print_tree(node, cur_depth = 0, max_depth = 0x3f3f3f):
+    if cur_depth >= max_depth:
+        return
+
+    print(cur_depth, node.get_win_rate(), '\n', node.board)
+    for child in node.children:
+        print_tree(child, cur_depth + 1, max_depth)
+
 if __name__ == '__main__':
 
     board = np.array([
@@ -162,26 +171,24 @@ if __name__ == '__main__':
         [0, 1, 2, 2, 1, 2, 0],
         [2, 1, 1, 1, 2, 2, 1]
     ])
-    
+
     test = MCT(board)
-    prev_win_rate = -2
-    cur_win_rate = -1
+    prev_win_rate = -1
+    cur_win_rate = 0
     ths = 1e-5
-    '''
+    win_rates = []
     while np.abs(cur_win_rate - prev_win_rate) >= ths:
         test.search(test.init_node)
         prev_win_rate = cur_win_rate
         cur_win_rate = test.init_node.get_win_rate()
-        print(prev_win_rate, cur_win_rate)
-    '''
+        #tackle edge case in order to prevent early stop in the first few steps of MCTS
+        if prev_win_rate == cur_win_rate and (cur_win_rate == 0 or cur_win_rate == 1):
+            prev_win_rate = -1
 
-    win_rates = []
-    for i in range(1000):
-        test.search(test.init_node)
-        win_rate = test.init_node.get_win_rate()
-        win_rates.append(win_rate)
-        print(win_rate)
+        win_rates.append(cur_win_rate)
+        print(cur_win_rate)
     
+    print_tree(test.init_node, max_depth = 3)
+
     plt.plot(range(len(win_rates)), win_rates)
     plt.show()
-
