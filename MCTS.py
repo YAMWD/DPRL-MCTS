@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 
 class Node:
     def __init__(self, board, parent = None):
@@ -11,11 +12,39 @@ class Node:
         self.parent = parent
         self.children = []
     
+        action_list = self.get_action_list()
+
+        for action in action_list:
+
+            inter_next_state = self.make_move(cur_player = 1, action = action)
+            inter_next_node = Node(inter_next_state)
+
+            next_action_list = inter_next_node.get_action_list()
+            if len(next_action_list):
+                for next_action in next_action_list:
+                    next_state = inter_next_node.make_move(cur_player = 2, action = next_action)
+                    next_node = Node(next_state, parent = self)
+                    self.children.append(next_node)
+            else:
+                self.children.append(inter_next_node)
+
     def get_win_rate(self):
         return self.num_wins / self.num_simulations if self.num_simulations else 0
 
     def get_scores(self):    
-        return [child.num_wins / child.num_simulations + self.c * np.sqrt(np.log(self.num_simulations) / child.num_simulations) for child in self.children]
+        return [child.num_wins / child.num_simulations + self.c * np.sqrt(np.log(self.num_simulations) / child.num_simulations) if child.num_simulations else np.inf for child in self.children]
+
+    def get_action_list(self):
+        action_list = []
+
+        #Check if it is leaf node
+        if((not self.check_playable()) or self.check_board()):
+            return action_list
+
+        for i in range(7):
+            if(self.check_mobility(i)):
+                action_list.append(i)
+        return action_list
 
     def check_child(self, board):
         # Check if next board states exists in current children
@@ -72,25 +101,24 @@ class MCT:
         self.init_node = Node(board)
 
     def selection(self, node, method = None):
+        #Check if it is leaf node
+        if((not node.check_playable()) or node.check_board()):
+            return node
+
+        if(method == 'random'):
+            action_list = node.get_action_list()
+            action = np.random.choice(action_list)
+            return action
+
         # selection based on UCB rule
         scores = node.get_scores()
+        return node.children[np.argmax(scores)]
 
-        if(len(scores) == 0 or method == 'random'):
-            action_list = []
-            for i in range(7):
-                if(node.check_mobility(i)):
-                    action_list.append(i)
-            action = np.random.choice(action_list)
-        else:
-            action = np.argmax(scores)
-        
-        return action
-
-    def expand(self, node, next_node):
-        node.children.append(next_node)
+    def expand(self, child):
+        return self.selection(child)
 
     def rollout(self, node):
-        cur_node = copy.deepcopy(node)
+        cur_node = node
         cur_player = 1
         while(cur_node.check_playable() and (not cur_node.check_board())):
             action = self.selection(cur_node, method = 'random')
@@ -116,23 +144,13 @@ class MCT:
         if((not node.check_playable()) or node.check_board()):
             return
 
-        action = self.selection(node)
+        child = self.selection(node)
 
-        inter_next_state = node.make_move(cur_player = 1, action = action)
-        inter_next_node = Node(inter_next_state)
-
-        next_action = self.selection(inter_next_node)
-        next_state = inter_next_node.make_move(cur_player = 2, action = next_action)
-        next_node = Node(next_state, parent = node)
-
-        child = node.check_child(next_state)
-        if(isinstance(child, bool)):
-            self.expand(node, next_node)
-            self.rollout(next_node)
-            self.search(next_node)
+        if child.num_simulations:
+            next_child = self.expand(child)
+            self.rollout(next_child)
         else:
-            self.rollout(next_node)
-            self.search(child)
+            self.rollout(child)
         
 if __name__ == '__main__':
 
@@ -144,9 +162,26 @@ if __name__ == '__main__':
         [0, 1, 2, 2, 1, 2, 0],
         [2, 1, 1, 1, 2, 2, 1]
     ])
-
+    
     test = MCT(board)
-
-    for i in range(10000):
+    prev_win_rate = -2
+    cur_win_rate = -1
+    ths = 1e-5
+    '''
+    while np.abs(cur_win_rate - prev_win_rate) >= ths:
         test.search(test.init_node)
-        print(test.init_node.get_win_rate())
+        prev_win_rate = cur_win_rate
+        cur_win_rate = test.init_node.get_win_rate()
+        print(prev_win_rate, cur_win_rate)
+    '''
+
+    win_rates = []
+    for i in range(1000):
+        test.search(test.init_node)
+        win_rate = test.init_node.get_win_rate()
+        win_rates.append(win_rate)
+        print(win_rate)
+    
+    plt.plot(range(len(win_rates)), win_rates)
+    plt.show()
+
