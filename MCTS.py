@@ -11,22 +11,6 @@ class Node:
         self.c = np.sqrt(2)
         self.parent = parent
         self.children = []
-    
-        action_list = self.get_action_list()
-
-        for action in action_list:
-
-            inter_next_state = self.make_move(cur_player = 1, action = action)
-            inter_next_node = Node(inter_next_state, parent = self)
-
-            next_action_list = inter_next_node.get_action_list()
-            if len(next_action_list):
-                for next_action in next_action_list:
-                    next_state = inter_next_node.make_move(cur_player = 2, action = next_action)
-                    next_node = Node(next_state, parent = self)
-                    self.children.append(next_node)
-            else:
-                self.children.append(inter_next_node)
 
     def get_win_rate(self):
         return self.num_wins / self.num_simulations if self.num_simulations else 0
@@ -44,6 +28,7 @@ class Node:
         for i in range(7):
             if(self.check_mobility(i)):
                 action_list.append(i)
+
         return action_list
 
     def check_child(self, board):
@@ -100,28 +85,38 @@ class MCT:
     def __init__(self, board):
         self.init_node = Node(board)
 
-    def selection(self, node, method = None):
+    def selection(self, node):
         #Check if it is leaf node
-        if((not node.check_playable()) or node.check_board()):
+        if len(node.children) == 0:
             return node
-
-        if(method == 'random'):
-            action_list = node.get_action_list()
-            action = np.random.choice(action_list)
-            return action
 
         # selection based on UCB rule
         scores = node.get_scores()
-        return node.children[np.argmax(scores)]
+        return self.selection(node.children[np.argmax(scores)])
 
-    def expand(self, child):
-        return self.selection(child)
+    def expand(self, node):
+        action_list = node.get_action_list()
+
+        for action in action_list:
+
+            inter_next_state = node.make_move(cur_player = 1, action = action)
+            inter_next_node = Node(inter_next_state, parent = node)
+
+            next_action_list = inter_next_node.get_action_list()
+            if len(next_action_list):
+                for next_action in next_action_list:
+                    next_state = inter_next_node.make_move(cur_player = 2, action = next_action)
+                    next_node = Node(next_state, parent = node)
+                    node.children.append(next_node)
+            else:
+                node.children.append(inter_next_node)    
 
     def rollout(self, node):
         cur_node = node
         cur_player = 1
         while(cur_node.check_playable() and (not cur_node.check_board())):
-            action = self.selection(cur_node, method = 'random')
+            action_list = cur_node.get_action_list()
+            action = np.random.choice(action_list)
             next_state = cur_node.make_move(cur_player = cur_player, action = action)
             cur_node = Node(next_state)
             if(cur_player == 1):
@@ -139,14 +134,14 @@ class MCT:
             self.back_prop(node.parent, result)
             
     def search(self, node):
-        #Check if it is leaf node
-        if((not node.check_playable()) or node.check_board()):
-            return
+        if len(node.children) == 0:
+            self.expand(node)
 
         child = self.selection(node)
 
         if child.num_simulations:
-            next_child = self.expand(child)
+            self.expand(child)
+            next_child = self.selection(child)
             result = self.rollout(next_child)
             self.back_prop(next_child, result)
         else:
@@ -161,6 +156,36 @@ def print_tree(node, cur_depth = 0, max_depth = 0x3f3f3f):
     for child in node.children:
         print_tree(child, cur_depth + 1, max_depth)
 
+def plot_board(board):
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+
+    for i in range(7):
+        for j in range(6):
+            # Draw the circles representing the pieces
+            circle = plt.Circle((i + 0.5, j + 0.5), 0.4, color='white', ec='black')
+            ax.add_patch(circle)
+
+            # Fill the circle based on the player's move
+            if board[j, i] == 1:
+                circle = plt.Circle((i + 0.5, j + 0.5), 0.4, color='red', ec='black')
+                ax.add_patch(circle)
+            elif board[j, i] == 2:
+                circle = plt.Circle((i + 0.5, j + 0.5), 0.4, color='yellow', ec='black')
+                ax.add_patch(circle)
+
+    plt.xlim(0, 7)
+    plt.ylim(0, 6)
+    plt.gca().invert_yaxis()  # Invert the y-axis to start from the bottom
+
+    # Create legend
+    legend_elements = [plt.Line2D([0], [0], marker='o', color='w', label='Player1', markerfacecolor='red', markersize=10),
+                       plt.Line2D([0], [0], marker='o', color='w', label='Player2', markerfacecolor='yellow', markersize=10)]
+
+    ax.legend(handles = legend_elements, loc = 'upper left', bbox_to_anchor=(1, 1))
+    plt.savefig('plots/init_board.pdf', bbox_inches = 'tight')
+
 if __name__ == '__main__':
 
     board = np.array([
@@ -172,6 +197,7 @@ if __name__ == '__main__':
         [2, 1, 1, 1, 2, 2, 1]
     ])
 
+    # plot_board(board)
     test = MCT(board)
     prev_win_rate = -1
     cur_win_rate = 0
